@@ -9,7 +9,8 @@
 // and to correct rotation handling
 
 // See license in root directory.
-
+#ifdef TOUCH
+#include"TFT_eSPI.h"
 
 /***************************************************************************************
 ** Function name:           getTouchRaw
@@ -241,3 +242,5 @@ void TFT_eSPI::setTouch(uint16_t *parameters){
   touchCalibration_invert_x = parameters[4] & 0x02;
   touchCalibration_invert_y = parameters[4] & 0x04;
 }
+
+#endif

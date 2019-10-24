@@ -1,9 +1,13 @@
 /***************************************************************************************
 // The following class creates Sprites in RAM, graphics can then be drawn in the Sprite
+#pragma once 
 // and rendered quickly onto the TFT screen. The class inherits the graphics functions
 // from the TFT_eSPI class. Some functions are overridden by this class so that the
 // graphics are written to the Sprite rather than the TFT.
 ***************************************************************************************/
+#pragma once
+#include<stdint.h>
+#include"TFT_eSPI.h"
 
 class TFT_eSprite : public TFT_eSPI {
 

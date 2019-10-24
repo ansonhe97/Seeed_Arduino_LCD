@@ -15,6 +15,7 @@
 
 
 #include "TFT_eSPI.h"
+#include<string.h>
 
 #ifdef TOUCH
   #ifdef FOURWIRETOUCH
@@ -25,7 +26,7 @@
 #endif
 
 
-SPIClass& _spi = SPI;
+SPIClass& _spi = LCD_SPI;
 
 // If it is a 16bit serial display we must transfer 16 bits every time
 #ifdef RPI_ILI9486_DRIVER
@@ -33,6 +34,9 @@ SPIClass& _spi = SPI;
 #else
   #define CMD_BITS 8-1
 #endif
+
+uint16_t ** buffer;
+//uint16_t buffer[TFT_WIDTH][TFT_HEIGHT];
 
 // Fast block write prototype
 void writeBlock(uint16_t color, uint32_t repeat);
@@ -42,6 +46,18 @@ uint8_t readByte(void);
 
 // GPIO parallel input/output control
 void busDir(uint32_t mask, uint8_t mode);
+
+void TFT_eSPI::push(){
+  spi_begin();
+  setWindow(0, 0, width() - 1, height() - 1);
+  for (uint32_t i = 0; i < TFT_WIDTH; i++){
+    for (uint32_t j = 0; j < TFT_HEIGHT; j++){
+      tft_Write_16(buffer[i][j]);
+    }
+  }
+  spi_end();
+  memset(buffer, -1, sizeof(buffer));
+}
 
 inline void TFT_eSPI::spi_begin(void){
 #if defined (SPI_HAS_TRANSACTION) && defined (SUPPORT_TRANSACTIONS) 
@@ -130,7 +146,7 @@ inline void TFT_eSPI::spi_end_read(void){
 ***************************************************************************************/
 TFT_eSPI::TFT_eSPI(int16_t w, int16_t h)
 {
-
+   use_cache = false;
 // The control pins are deliberately set to the inactive state (CS high) as setup()
 // might call and initialise other SPI peripherals which would could cause conflicts
 // if CS is floating or undefined.
@@ -2586,7 +2602,10 @@ void TFT_eSPI::drawPixel(int32_t x, int32_t y, uint32_t color)
 {
   // Range checking
   if ((x < 0) || (y < 0) ||(x >= _width) || (y >= _height)) return;
-
+  if (use_cache){
+    buffer[y][x] = uint16_t(color);
+    return;
+  }
   spi_begin();
 
 #ifdef CGRAM_OFFSET
@@ -2850,6 +2869,13 @@ void TFT_eSPI::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color)
 
   if (h < 1) return;
 
+  if (use_cache){
+    for (auto end = y + h; y < end; y++){
+      buffer[y][x] = color;
+    }
+    return;
+  }
+
   spi_begin();
 
   setWindow(x, y, x, y + h - 1);
@@ -2880,6 +2906,13 @@ void TFT_eSPI::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color)
   if ((x + w) > _width)  w = _width  - x;
 
   if (w < 1) return;
+
+  if (use_cache){
+    for (auto end = x + w; x < end; x++){
+      buffer[y][x] = color;
+    }
+    return;
+  }
 
   spi_begin();
 
@@ -2914,6 +2947,19 @@ void TFT_eSPI::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col
 
   if ((w < 1) || (h < 1)) return;
 
+  if (use_cache){
+    // uint8_t  r = (color >> 16) & 0x3f;
+    // uint8_t  g = (color >> 8) & 0x1f;
+    // uint8_t  b = (color) & 0x1f;
+    // uint16_t c = r << 11 | g << 5 | b;
+    uint16_t c = color;
+    for (size_t i = y; i < y + h; i++){
+      for (size_t j = x; j < x + w; j++){
+        buffer[i][j] = c;
+      }
+    }
+    return;
+  }
   spi_begin();
 
   setWindow(x, y, x + w - 1, y + h - 1);
@@ -4170,17 +4216,3 @@ void TFT_eSPI::getSetup(setup_t &tft_settings)
   tft_settings.tch_spi_freq = 0;
 #endif
 }
-
-////////////////////////////////////////////////////////////////////////////////////////
-#ifdef TOUCH
-  #include "Extensions/Touch.cpp"
-  #include "Extensions/Button.cpp"
-#endif
-
-#include "Extensions/Sprite.cpp"
-
-#ifdef SMOOTH_FONT
-  #include "Extensions/Smooth_font.cpp"
-#endif
-////////////////////////////////////////////////////////////////////////////////////////
-

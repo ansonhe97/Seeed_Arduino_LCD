@@ -4,6 +4,9 @@
 // A slightly different implementation in this TFT_eSPI library allows the button
 // legends to be in any font
 ***************************************************************************************/
+#pragma once
+#include<stdint.h>
+#include"TFT_eSPI.h"
 
 class TFT_eSPI_Button {
 

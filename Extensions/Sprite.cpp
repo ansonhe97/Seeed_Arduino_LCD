@@ -10,6 +10,8 @@
 // there is a nett performance gain by using swapped bytes.
 ***************************************************************************************/
 
+#include"Sprite.h"
+
 /***************************************************************************************
 ** Function name:           TFT_eSprite
 ** Description:             Class constructor

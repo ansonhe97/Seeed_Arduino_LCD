@@ -433,10 +433,14 @@ const PROGMEM fontinfo fontdata [] = {
 
 // Class functions and variables
 class TFT_eSPI : public Print {
-
+  bool     use_cache;
  public:
 
   TFT_eSPI(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);
+  void push();
+  void useCache(bool enable){
+    use_cache = enable;
+  }
 
   void     init(uint8_t tc = TAB_COLOUR), begin(uint8_t tc = TAB_COLOUR); // Same - begin included for backwards compatibility
 
@@ -645,10 +649,8 @@ class TFT_eSPI : public Print {
 #endif
 
   uint32_t lastColor = 0xFFFF;
-
-
+  
  protected:
-
   int32_t  win_xe, win_ye;
 
   int32_t  _init_width, _init_height; // Display w/h as input, used by setRotation()
@@ -686,11 +688,5 @@ class TFT_eSPI : public Print {
 #endif
 
 }; // End of class TFT_eSPI
-
-// Load the Button Class
-#include "Extensions/Button.h"
-
-// Load the Sprite Class
-#include "Extensions/Sprite.h"
 
 #endif
