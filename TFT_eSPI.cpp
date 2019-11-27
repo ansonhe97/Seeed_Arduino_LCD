@@ -376,6 +376,7 @@ void TFT_eSPI::init(uint8_t tc)
 #endif
   pinMode(LCD_BACKLIGHT, OUTPUT);
   digitalWrite(LCD_BACKLIGHT, HIGH);
+  inner::buffer = nullptr;
 }
 
 

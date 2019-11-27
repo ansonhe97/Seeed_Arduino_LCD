@@ -179,17 +179,15 @@
   #define tft_Write_32(C)  _spi.transfer((void *)C, 4)
 #else
   #define tft_Write_8(C)   _spi.transfer(C)
-  #define tft_Write_16(C)           \
-    using namespace inner;          \
-    if (buffer){                    \
-      if (fill_yi <= fill_y1){      \
+  #define tft_Write_16(C)                     \
+    using namespace inner;                    \
+    if (inner::buffer && fill_yi <= fill_y1){ \
         BUF16(fill_xi, fill_yi);    \
         fill_xi += 1;               \
         if (fill_xi > fill_x1){     \
           fill_xi = fill_x0;        \
           fill_yi += 1;             \
         }                           \
-      }                             \
     }                               \
     else{                           \
       _spi.transfer(C >> 8);        \
