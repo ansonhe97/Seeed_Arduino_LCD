@@ -152,6 +152,7 @@
 #define SPI_32(H,L) ( (H)<<16 | (L) )
 #define COL_32(H,L) ( (H)<<16 | (L) )
 
+#define BUF16(x,y)   inner::buffer[y * tft.width() + x]
 
 
 #if  defined (ILI9488_DRIVER) // 16 bit colour converted to 3 bytes for 18 bit RGB
@@ -178,8 +179,22 @@
   #define tft_Write_32(C)  _spi.transfer((void *)C, 4)
 #else
   #define tft_Write_8(C)   _spi.transfer(C)
-  #define tft_Write_16(C)  _spi.transfer(C >> 8); \
-                           _spi.transfer(C & 0xFF)
+  #define tft_Write_16(C)           \
+    using namespace inner;          \
+    if (buffer){                    \
+      if (fill_yi <= fill_y1){      \
+        BUF16(fill_xi, fill_yi);    \
+        fill_xi += 1;               \
+        if (fill_xi > fill_x1){     \
+          fill_xi = fill_x0;        \
+          fill_yi += 1;             \
+        }                           \
+      }                             \
+    }                               \
+    else{                           \
+      _spi.transfer(C >> 8);        \
+      _spi.transfer(C & 0xFF);      \
+    }
   #define tft_Write_32(C)  _spi.transfer(C >> 24); \
                            _spi.transfer((C & 0xFFFFFF) >> 16); \
                            _spi.transfer((C & 0xFFFF)  >> 8); \
@@ -430,17 +445,15 @@ const PROGMEM fontinfo fontdata [] = {
   #endif
 };
 
-
 // Class functions and variables
 class TFT_eSPI : public Print {
-  bool     use_cache;
+
  public:
 
   TFT_eSPI(int16_t _W = TFT_WIDTH, int16_t _H = TFT_HEIGHT);
-  void push();
-  void useCache(bool enable){
-    use_cache = enable;
-  }
+ public:
+  void    drawToBuffer(uint16_t * buffer);
+  void    drawToTFT();
 
   void     init(uint8_t tc = TAB_COLOUR), begin(uint8_t tc = TAB_COLOUR); // Same - begin included for backwards compatibility
 
@@ -649,8 +662,10 @@ class TFT_eSPI : public Print {
 #endif
 
   uint32_t lastColor = 0xFFFF;
-  
+
+
  protected:
+
   int32_t  win_xe, win_ye;
 
   int32_t  _init_width, _init_height; // Display w/h as input, used by setRotation()
@@ -688,5 +703,11 @@ class TFT_eSPI : public Print {
 #endif
 
 }; // End of class TFT_eSPI
+
+// Load the Button Class
+#include "Extensions/Button.h"
+
+// Load the Sprite Class
+#include "Extensions/Sprite.h"
 
 #endif

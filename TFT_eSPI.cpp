@@ -15,7 +15,6 @@
 
 
 #include "TFT_eSPI.h"
-#include<string.h>
 
 #ifdef TOUCH
   #ifdef FOURWIRETOUCH
@@ -27,6 +26,7 @@
 
 
 SPIClass& _spi = LCD_SPI;
+extern TFT_eSPI tft;
 
 // If it is a 16bit serial display we must transfer 16 bits every time
 #ifdef RPI_ILI9486_DRIVER
@@ -35,8 +35,11 @@ SPIClass& _spi = LCD_SPI;
   #define CMD_BITS 8-1
 #endif
 
-uint16_t ** buffer;
-//uint16_t buffer[TFT_WIDTH][TFT_HEIGHT];
+// BUF16 fill area
+namespace inner{
+  uint16_t * buffer;
+  uint16_t   fill_x0, fill_x1, fill_xi, fill_y0, fill_y1, fill_yi;
+}
 
 // Fast block write prototype
 void writeBlock(uint16_t color, uint32_t repeat);
@@ -47,16 +50,11 @@ uint8_t readByte(void);
 // GPIO parallel input/output control
 void busDir(uint32_t mask, uint8_t mode);
 
-void TFT_eSPI::push(){
-  spi_begin();
-  setWindow(0, 0, width() - 1, height() - 1);
-  for (uint32_t i = 0; i < TFT_WIDTH; i++){
-    for (uint32_t j = 0; j < TFT_HEIGHT; j++){
-      tft_Write_16(buffer[i][j]);
-    }
-  }
-  spi_end();
-  memset(buffer, -1, sizeof(buffer));
+void TFT_eSPI::drawToBuffer(uint16_t * buffer){
+  inner::buffer = buffer;
+}
+void TFT_eSPI::drawToTFT(){
+  inner::buffer = nullptr;
 }
 
 inline void TFT_eSPI::spi_begin(void){
@@ -146,7 +144,9 @@ inline void TFT_eSPI::spi_end_read(void){
 ***************************************************************************************/
 TFT_eSPI::TFT_eSPI(int16_t w, int16_t h)
 {
-   use_cache = false;
+  using namespace inner;
+  fill_x0 = 0, fill_x1 = 0, fill_xi = 1, fill_y0 = 0, fill_y1 = 0, fill_yi = 1;
+
 // The control pins are deliberately set to the inactive state (CS high) as setup()
 // might call and initialise other SPI peripherals which would could cause conflicts
 // if CS is floating or undefined.
@@ -244,8 +244,10 @@ TFT_eSPI::TFT_eSPI(int16_t w, int16_t h)
 #ifdef SMOOTH_FONT
   fontsloaded |= 0x8000; // Bit 15 set
 #endif
-}
 
+  pinMode(LCD_BACKLIGHT, OUTPUT);
+  digitalWrite(LCD_BACKLIGHT, HIGH);
+}
 
 /***************************************************************************************
 ** Function name:           begin
@@ -372,6 +374,8 @@ void TFT_eSPI::init(uint8_t tc)
     pinMode(TFT_BL, OUTPUT);
   #endif
 #endif
+  pinMode(LCD_BACKLIGHT, OUTPUT);
+  digitalWrite(LCD_BACKLIGHT, HIGH);
 }
 
 
@@ -582,7 +586,9 @@ uint32_t TFT_eSPI::readcommand32(uint8_t cmd_function, uint8_t index)
 ***************************************************************************************/
 uint16_t TFT_eSPI::readPixel(int32_t x0, int32_t y0)
 {
-
+  if (inner::buffer){
+    return BUF16(x0, y0);
+  }
   spi_begin_read();
 
   readAddrWindow(x0, y0, 1, 1); // Sets CS low
@@ -2185,12 +2191,23 @@ void TFT_eSPI::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32
   {
     uint8_t column[6];
     uint8_t mask = 0x1;
+    for (int8_t i = 0; i < 5; i++ ) column[i] = pgm_read_byte(font + (c * 5) + i);
+    column[5] = 0;
+
+    if (inner::buffer){
+      for (int8_t j = 0; j < 8; j++) {
+        for (int8_t k = 0; k < 5; k++) {
+          BUF16(x + k, y + j) = column[k] & mask ? color : bg;
+        }
+        mask <<= 1;
+      }
+      return;
+    }
+
     spi_begin();
 
     setWindow(x, y, x+5, y+8);
 
-    for (int8_t i = 0; i < 5; i++ ) column[i] = pgm_read_byte(font + (c * 5) + i);
-    column[5] = 0;
 
 #if defined (ESP8266) && !defined (ILI9488_DRIVER)
     color = (color >> 8) | (color << 8);
@@ -2430,6 +2447,11 @@ void TFT_eSPI::setAddrWindow(int32_t x0, int32_t y0, int32_t w, int32_t h)
 // Chip select stays low, call spi_begin first. Use setAddrWindow() from sketches
 void TFT_eSPI::setWindow(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
+  using namespace inner;
+  if (inner::buffer){
+    fill_x0 = x0, fill_x1 = x1, fill_xi = x0, fill_y0 = y0, fill_y1 = y1, fill_yi = y0;
+    return;
+  }
   //spi_begin(); // Must be called before setWimdow
 
   addr_col = 0xFFFF;
@@ -2602,10 +2624,12 @@ void TFT_eSPI::drawPixel(int32_t x, int32_t y, uint32_t color)
 {
   // Range checking
   if ((x < 0) || (y < 0) ||(x >= _width) || (y >= _height)) return;
-  if (use_cache){
-    buffer[y][x] = uint16_t(color);
+
+  if (inner::buffer != nullptr){
+    BUF16(x,y) = color;
     return;
   }
+
   spi_begin();
 
 #ifdef CGRAM_OFFSET
@@ -2869,11 +2893,11 @@ void TFT_eSPI::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color)
 
   if (h < 1) return;
 
-  if (use_cache){
-    for (auto end = y + h; y < end; y++){
-      buffer[y][x] = color;
-    }
-    return;
+  if (inner::buffer != nullptr){
+     for (int i = y; i < y + h; i++){
+       BUF16(x, i) = color;
+     }
+     return;
   }
 
   spi_begin();
@@ -2907,11 +2931,12 @@ void TFT_eSPI::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color)
 
   if (w < 1) return;
 
-  if (use_cache){
-    for (auto end = x + w; x < end; x++){
-      buffer[y][x] = color;
-    }
-    return;
+  
+  if (inner::buffer != nullptr){
+     for (int i = x; i < x + w; i++){
+       BUF16(i, y) = color;
+     }
+     return;
   }
 
   spi_begin();
@@ -2947,19 +2972,16 @@ void TFT_eSPI::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col
 
   if ((w < 1) || (h < 1)) return;
 
-  if (use_cache){
-    // uint8_t  r = (color >> 16) & 0x3f;
-    // uint8_t  g = (color >> 8) & 0x1f;
-    // uint8_t  b = (color) & 0x1f;
-    // uint16_t c = r << 11 | g << 5 | b;
-    uint16_t c = color;
-    for (size_t i = y; i < y + h; i++){
-      for (size_t j = x; j < x + w; j++){
-        buffer[i][j] = c;
+  
+  if (inner::buffer != nullptr){
+    for (int j = y; j < y + h; j++){
+      for (int i = x; i < x + w; i++){
+          BUF16(i, j) = color;
       }
     }
     return;
   }
+
   spi_begin();
 
   setWindow(x, y, x + w - 1, y + h - 1);
@@ -3512,7 +3534,9 @@ int16_t TFT_eSPI::drawChar(uint16_t uniCode, int32_t x, int32_t y, uint8_t font)
               tnp = np;
               while (tnp--) {tft_Write_16(textcolor);}
             }
-            else {tft_Write_16(textcolor);}
+            else {
+              tft_Write_16(textcolor);
+            }
             px += textsize;
 
             if (px >= (x + width * textsize))
@@ -4216,3 +4240,17 @@ void TFT_eSPI::getSetup(setup_t &tft_settings)
   tft_settings.tch_spi_freq = 0;
 #endif
 }
+
+////////////////////////////////////////////////////////////////////////////////////////
+#ifdef TOUCH
+  #include "Extensions/Touch.cpp"
+  #include "Extensions/Button.cpp"
+#endif
+
+#include "Extensions/Sprite.cpp"
+
+#ifdef SMOOTH_FONT
+  #include "Extensions/Smooth_font.cpp"
+#endif
+////////////////////////////////////////////////////////////////////////////////////////
+
