@@ -588,7 +588,7 @@ uint32_t TFT_eSPI::readcommand32(uint8_t cmd_function, uint8_t index)
 uint16_t TFT_eSPI::readPixel(int32_t x0, int32_t y0)
 {
   if (inner::buffer){
-    return BUF16(x0, y0);
+    return BUF16_RD(x0, y0);
   }
   spi_begin_read();
 
@@ -2198,7 +2198,8 @@ void TFT_eSPI::drawChar(int32_t x, int32_t y, uint16_t c, uint32_t color, uint32
     if (inner::buffer){
       for (int8_t j = 0; j < 8; j++) {
         for (int8_t k = 0; k < 5; k++) {
-          BUF16(x + k, y + j) = column[k] & mask ? color : bg;
+          auto c = column[k] & mask ? color : bg;
+          BUF16(x + k, y + j) = BUF_COLOR(c);
         }
         mask <<= 1;
       }
@@ -2627,7 +2628,7 @@ void TFT_eSPI::drawPixel(int32_t x, int32_t y, uint32_t color)
   if ((x < 0) || (y < 0) ||(x >= _width) || (y >= _height)) return;
 
   if (inner::buffer != nullptr){
-    BUF16(x,y) = color;
+    BUF16(x,y) = BUF_COLOR(color);
     return;
   }
 
@@ -2896,7 +2897,7 @@ void TFT_eSPI::drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color)
 
   if (inner::buffer != nullptr){
      for (int i = y; i < y + h; i++){
-       BUF16(x, i) = color;
+       BUF16(x, i) = BUF_COLOR(color);
      }
      return;
   }
@@ -2935,7 +2936,7 @@ void TFT_eSPI::drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color)
   
   if (inner::buffer != nullptr){
      for (int i = x; i < x + w; i++){
-       BUF16(i, y) = color;
+       BUF16(i, y) = BUF_COLOR(color);
      }
      return;
   }
@@ -2977,7 +2978,7 @@ void TFT_eSPI::fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col
   if (inner::buffer != nullptr){
     for (int j = y; j < y + h; j++){
       for (int i = x; i < x + w; i++){
-          BUF16(i, j) = color;
+          BUF16(i, j) = BUF_COLOR(color);
       }
     }
     return;

@@ -152,7 +152,9 @@
 #define SPI_32(H,L) ( (H)<<16 | (L) )
 #define COL_32(H,L) ( (H)<<16 | (L) )
 
-#define BUF16(x,y)   inner::buffer[y * tft.width() + x]
+#define BUF16(x,y)       inner::buffer[y * tft.width() + x]
+#define BUF_COLOR(c)     ((c) >> 8 | (c) << 8)
+#define BUF16_RD(x,y)    (inner::buffer[y * tft.width() + x] >> 8 | inner::buffer[y * tft.width() + x] << 8)
 
 
 #if  defined (ILI9488_DRIVER) // 16 bit colour converted to 3 bytes for 18 bit RGB
@@ -179,19 +181,19 @@
   #define tft_Write_32(C)  _spi.transfer((void *)C, 4)
 #else
   #define tft_Write_8(C)   _spi.transfer(C)
-  #define tft_Write_16(C)                     \
-    using namespace inner;                    \
-    if (inner::buffer && fill_yi <= fill_y1){ \
-        BUF16(fill_xi, fill_yi);    \
-        fill_xi += 1;               \
-        if (fill_xi > fill_x1){     \
-          fill_xi = fill_x0;        \
-          fill_yi += 1;             \
-        }                           \
-    }                               \
-    else{                           \
-      _spi.transfer(C >> 8);        \
-      _spi.transfer(C & 0xFF);      \
+  #define tft_Write_16(C)                           \
+    using namespace inner;                          \
+    if (inner::buffer && fill_yi <= fill_y1){       \
+        BUF16(fill_xi, fill_yi) = C >> 8 | C << 8;  \
+        fill_xi += 1;                               \
+        if (fill_xi > fill_x1){                     \
+          fill_xi = fill_x0;                        \
+          fill_yi += 1;                             \
+        }                                           \
+    }                                               \
+    else{                                           \
+      _spi.transfer(C >> 8);                        \
+      _spi.transfer(C & 0xFF);                      \
     }
   #define tft_Write_32(C)  _spi.transfer(C >> 24); \
                            _spi.transfer((C & 0xFFFFFF) >> 16); \
